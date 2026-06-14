@@ -1,204 +1,167 @@
-# Hybrid Obstacle Avoidance Architecture of Double-Layer Diffusion Model Integrated with Transformer
+<p align="center">
+  <img src="assets/jppd_architecture.png" alt="JPPD architecture" width="96%">
+</p>
 
-> **Research Repository** — This repository contains:
-> 1. **[`dynamic_mpd/`](./dynamic_mpd/)** — *Our research*: A hybrid obstacle avoidance architecture combining a dual-layer diffusion model with a Transformer encoder for dynamic environments. See [`dynamic_mpd/README_EN.md`](./dynamic_mpd/README_EN.md) for full details.
-> 2. **The original MPD project (files below)** — *Third-party base*: The Motion Planning Diffusion codebase by [Carvalho et al.](https://github.com/joaoamcarvalho/mpd-splines-public), which serves as the **lower-layer diffusion model** in our architecture. All credit for this component goes to the original authors; we use it unchanged as a pre-trained prior.
+<h1 align="center">JPPD: Joint Prediction-Planning Diffusion</h1>
 
----
+<p align="center">
+  <b>Differentiable safety-guided joint trajectory generation for dynamic obstacle avoidance in shared-space intelligent transportation systems.</b>
+</p>
 
-## 📁 Repository Structure
-
-```
-.
-├── dynamic_mpd/          ← OUR RESEARCH CODE (dual-layer diffusion + Transformer)
-│   ├── src/              ← Core model implementations
-│   ├── scripts/          ← Training, evaluation, and demo scripts
-│   ├── results/          ← Experimental results and visualizations
-│   ├── trained_models/   ← Our trained Transformer obstacle diffusion models
-│   └── README_EN.md      ← Full documentation for our research
-│
-├── mpd/                  ← Original MPD library (third-party, unchanged)
-├── scripts/              ← Original MPD training/inference scripts
-├── deps/                 ← Dependencies (experiment_launcher, pybullet_ompl, etc.)
-└── ...                   ← Other original MPD project files
-```
-
-> ⚠️ **Note on pre-trained models**: The upper-layer diffusion model in `dynamic_mpd` uses MPD's pre-trained weights from `data_public/data_trained_models/` (cached locally, not re-uploaded due to size). The lower-layer MPD model is used as-is from this project.
+<p align="center">
+  <a href="#overview"><img alt="Project" src="https://img.shields.io/badge/project-JPPD-111827"></a>
+  <a href="#method"><img alt="Method" src="https://img.shields.io/badge/method-joint%20diffusion-2563eb"></a>
+  <a href="#results"><img alt="Results" src="https://img.shields.io/badge/focus-tail%20safety-16a34a"></a>
+  <a href="#repository-status"><img alt="Status" src="https://img.shields.io/badge/code-placeholder%20release-f59e0b"></a>
+</p>
 
 ---
 
-# Motion Planning Diffusion: Learning and Adapting Robot Motion Planning with Diffusion Models
+## Overview
 
-[![paper](https://img.shields.io/badge/Paper-%F0%9F%93%96-lightgray)](https://ieeexplore.ieee.org/abstract/document/11097366)
-[![arXiv](https://img.shields.io/badge/arXiv-2502.08378-brown)](https://arxiv.org/abs/2412.19948)
-[![](https://img.shields.io/badge/Website-%F0%9F%9A%80-yellow)](https://sites.google.com/view/motionplanningdiffusion/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)]()
+Shared-space mobility is no longer a clean lane-following problem. Delivery robots, pedestrians, service carts, wheelchairs, micromobility users, and low-speed autonomous platforms increasingly negotiate the same sidewalks, corridors, plazas, and campus logistics zones.
 
-<div style="display: flex; text-align:center; justify-content: center">
-    <img src="figures/EnvSimple2D-RobotPointMass2D-joint_joint-one-RRTConnect.gif" alt="Image 1" width="400" style="display: inline-block;">
-    <img src="figures/EnvWarehouse-RobotPanda-config_file_v01-joint_joint-one-RRTConnect.gif" alt="Image 2" width="400" style="display: inline-block;">
-</div>
+Most navigation stacks still split the problem into two steps:
 
-This repository implements Motion Planning Diffusion (**MPD**) - a method for learning and planning robot motions with diffusion models.
+1. predict how nearby participants will move;
+2. plan the ego robot trajectory against those predicted futures.
 
-An older version of this project is deprecated, but still available at [https://github.com/jacarvalho/mpd-public](https://github.com/jacarvalho/mpd-public).
+That separation creates a one-way information flow. The robot plan can react to predicted participants, but the selected robot plan cannot reshape the predicted multi-agent evolution. JPPD removes that boundary by sampling the ego future and participant futures together from one coupled distribution.
 
-Please contact me if you have any questions -- [joao@robot-learning.de](mailto:joao@robot-learning.de)
+<p align="center">
+  <img src="assets/jppd_problem_setting.png" alt="Separated prediction-planning versus JPPD" width="96%">
+</p>
 
----
+## What JPPD Changes
 
-# Installation
+| Old separated stack | JPPD joint stack |
+| --- | --- |
+| Predict obstacle futures first, then freeze them. | Sample ego and participant futures as one joint state. |
+| Planner reacts to predictions, but cannot influence them. | Cross-trajectory attention lets ego and participant hypotheses co-evolve. |
+| Safety is often added as a post-hoc repulsive field. | DSPG injects a differentiable safety gradient during sampling. |
+| Sequential prediction and planning diffusion increases latency. | Conditional flow matching uses one compact sampler for fast replanning. |
 
-Pre-requisites:
+The central object is a joint future tensor:
 
-- Ubuntu 22.04 (maybe works with newer versions)
-- [miniconda](https://docs.conda.io/projects/miniconda/en/latest/index.html)
-
-Clone this repository
-
-```bash
-mkdir -p ~/Projects/MotionPlanningDiffusion/
-cd ~/Projects/MotionPlanningDiffusion/
-git clone --recurse-submodules git@github.com:joaoamcarvalho/mpd-splines-public.git mpd-splines-public
-cd mpd-splines-public
+```text
+Y = [ego trajectory, participant trajectory 1, ..., participant trajectory N]
 ```
 
-Download [IsaacGym Preview 4](https://developer.nvidia.com/isaac-gym) and extract it under `deps/isaacgym`
+JPPD learns and samples `p(Y | context)` directly, then executes the first ego segment in a receding-horizon loop.
 
-```bash
-mv ~/Downloads/IsaacGym_Preview_4_Package.tar.gz ~/Projects/MotionPlanningDiffusion/mpd-splines-public/deps/
-cd ~/Projects/MotionPlanningDiffusion/mpd-splines-public/deps
-tar -xvf IsaacGym_Preview_4_Package.tar.gz
+## Important Note On "BLADE"
+
+In this repository and the associated manuscript discussion, **BLADE is used as a broad shorthand for a decoupled prediction-then-planning composition**. It refers to the architectural pattern where an upper component predicts obstacle or participant futures and a lower component plans the ego trajectory against those fixed futures.
+
+It should not be read as a claim that every BLADE mention corresponds to one unique, monolithic, mandatory implementation. The key contrast is conceptual:
+
+```text
+BLADE-style composition: prediction module + planning module, connected sequentially.
+JPPD: one joint generative sampler for prediction and planning.
 ```
 
-Run the bash setup script to install everything (it can take a while).
+This clarification matters because the paper's novelty is not a cosmetic renaming of an earlier stack. The contribution is the move from a decoupled composition to a bidirectionally coupled joint prediction-planning diffusion process.
 
-```bash
-bash setup.sh
+## Method
+
+JPPD contains four pieces:
+
+| Component | Role |
+| --- | --- |
+| Joint Prediction-Planning Diffusion | Samples ego and participant futures from one conditional distribution. |
+| CDiT | A causal diffusion Transformer with agent-time tokens and cross-trajectory attention. |
+| DSPG | Differentiable Safety Potential Guidance, a learned time-varying occupancy potential whose gradient guides the sampler. |
+| Risk-aware selector | Scores complete joint futures and executes the first safe ego segment before replanning. |
+
+The sampler uses conditional flow matching so that embedded deployment can run with fewer inference steps than a long DDPM chain. Safety guidance enters the vector field itself:
+
+```text
+guided_vector_field = learned_joint_vector_field - safety_weight * grad(safety_potential)
 ```
 
-Make sure to set environment variables and activate the conda environment before running any scripts.
+This makes safety a sampling-time bias over the joint prediction-planning posterior, not a post-processing patch after a trajectory has already been generated.
 
-```bash
-source set_env_variables.sh
-conda activate mpd-splines-public
-```
+## Results
 
----
+The evaluation emphasizes operational shared-space metrics: near misses, blockage time, induced participant deviation, hard-braking events, collision rate, and embedded latency.
 
-## Download the datasets and pre-trained models
+<p align="center">
+  <img src="assets/jppd_navigation_results.png" alt="JPPD navigation results" width="96%">
+</p>
 
-Download https://drive.google.com/file/d/1KG5ejn0g0KkDuUK6tPUqfmRYCNoKzK4K/view?usp=drive_link
+### Scenario-Grounded Shared-Space Simulation
 
-```bash
-tar -xvf data_public.tar.gz
-ln -s data_public/data_trajectories data_trajectories
-ln -s data_public/data_trained_models data_trained_models
-```
+| Method | Success | Collision | Near-miss / 100 | Blockage | Hard braking / 100 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| BLADE-style separated stack | 95.9% | 2.4% | 14.8 | 2.31 s/episode | 6.8 |
+| JPPD-Uni | 96.7% | 1.9% | 12.6 | 2.04 s/episode | 5.3 |
+| JPPD-FixedRep | 97.3% | 1.5% | 10.1 | 1.86 s/episode | 4.7 |
+| **JPPD** | **98.4%** | **0.9%** | **7.2** | **1.24 s/episode** | **2.6** |
 
----
+### Aggregate 2D Navigation
 
-Everytime when you want to run the code, you need to execute the below code first :
+| Method | Success | Planning-cycle time | Path efficiency |
+| --- | ---: | ---: | ---: |
+| BLADE-style separated stack | 98.7% | 47 ms | 0.96 |
+| JPPD-Uni | 97.8% | 31 ms | 0.96 |
+| JPPD without DSPG | 96.6% | 28 ms | 0.95 |
+| **JPPD** | **99.2%** | **32 ms** | **0.97** |
 
-```
-cd ~/mpd-build/scripts/inference
-eval "$(~/miniconda3/bin/conda shell.bash hook)"
-conda activate mpd-splines-public
-export LD_LIBRARY_PATH=$HOME/miniconda3/envs/mpd-splines-public/lib:$HOME/mpd-build/deps/pybullet_ompl/ompl/py-bindings/ompl/util:$LD_LIBRARY_PATH
-export PYTHONPATH=$HOME/mpd-build:$HOME/mpd-build/deps/pybullet_ompl/ompl/py-bindings:$HOME/mpd-build/deps/isaacgym/python:$HOME/mpd-build/deps/pybullet_ompl:$HOME/mpd-build/mpd/torch_robotics
-export CPLUS_INCLUDE_PATH=/usr/include:$CPLUS_INCLUDE_PATH
-python inference.py
-```
+The measured success-rate gain should be read as a tail-risk reduction. At high baseline success rates, the remaining failures are difficult, safety-critical cases such as near-simultaneous crossings, short-horizon reversals, or crowded local minima.
 
-## Inference with pre-trained models
+## ROSOrin Deployment
 
-The configuration files under [scripts/inference/cfgs](scripts/inference/cfgs) contain the hyperparameters for inference.
-Inside the file `scripts/inference/inference.py` you can change the `cfg_inference_path` parameter to try models trained for different environments.
+JPPD was validated in simulation, naturalistic pedestrian replay, Isaac Sim, and physical ROSOrin trials. The deployment interface exposes joint ego-participant futures, DSPG risk regions, selected ego trajectory, and the first receding-horizon control segment.
 
-```bash
-cd scripts/inference
-python inference.py
-```
+<p align="center">
+  <img src="assets/rosorin_deployment.png" alt="ROSOrin deployment visualization" width="96%">
+</p>
 
----
+Physical ROSOrin trials reported 191/200 successful runs across open, corridor, cluttered, and dynamic scenarios. The observed failures were dominated by LiDAR track merging, sudden participant reversals, and localization drift, which are explicitly outside the claim of formal safety certification.
 
-# Training the prior models (from scratch)
+## Repository Status
 
-## Data generation
+This repository is currently maintained as the public project page for the JPPD manuscript.
 
-Generating data takes a long time, so we recommend [downloading the dataset](#download-the-datasets-and-pre-trained-models).
-But if anyway you want to generate your own data, you can do it with the scripts in the `scripts/generate_data` folder.
+| Directory | Purpose |
+| --- | --- |
+| `assets/` | Figures used by this README. |
+| `docs/` | Method notes, release plan, and citation material. |
+| `src/` | Placeholder for the future JPPD implementation. |
+| `experiments/` | Placeholder for benchmark and reproduction scripts. |
+| `checkpoints/` | Placeholder for trained CDiT and DSPG weights. |
+| `data/` | Placeholder for dataset preparation scripts and metadata. |
+| `logs/` | Placeholder for simulation, Isaac Sim, and ROSOrin trial logs. |
 
-Go to the `scripts/generate_data` folder.
+The full code, trained models, simulation configurations, and real-robot trial logs are planned for public release after the paper review and release process are complete. The placeholders are intentional: they keep the public repository stable while avoiding the accidental publication of incomplete or non-reproducible research artifacts.
 
-The base script is
+## Planned Release
 
-```bash
-python generate_trajectories.py
-```
-
-To generate multiple datasets in parallel, adapt the `launch_generate_trajectories.py` script.
-
-```bash
-python launch_generate_trajectories.py
-```
-
-After generating the data, run the post-processing file to combine all data into a hdf5 file.
-Then you can double the dataset by flipping the trajectory paths.
-
-```bash
-python post_process_trajectories.py --help
-python flip_solution_paths.py  (change the PATH_TO_DATASETS variable)
-```
-
-To visualize the generated data, use the `visualize_trajectories.py` script.
-
-```bash
-python visualize_trajectories.py
-```
-
----
-
-## Training the models
-
-The training scripts are in the `scripts/train` folder.
-
-The base script is
-
-```bash
-cd scripts/train
-python train.py
-```
-
-To train multiple models in parallel, use the `launch_train_*` files.
-
----
+- CDiT joint sampler implementation.
+- DSPG occupancy-potential model and guidance hooks.
+- Synthetic shared-space scenario generator.
+- ETH/UCY replay conversion scripts.
+- Isaac Sim ROSOrin validation configuration.
+- ROSOrin deployment interface.
+- Evaluation scripts for success, collision rate, latency, ADE/FDE, near misses, blockage time, induced deviation, and hard-braking events.
+- Trained weights and trial logs where redistribution is permitted.
 
 ## Citation
 
-If you use our work or code base, please cite our articles:
+If you discuss or build on this work, please cite the manuscript:
 
-```latex
-@article{carvalho2025motion,
-  title={Motion planning diffusion: Learning and adapting robot motion planning with diffusion models},
-  author={Carvalho, Jo{\~a}o and Le, An T and Kicki, Piotr and Koert, Dorothea and Peters, Jan},
-  journal={IEEE Transactions on Robotics},
-  year={2025},
-  publisher={IEEE}
-}
-
-@inproceedings{carvalho2023motion,
-  title={Motion planning diffusion: Learning and planning of robot motions with diffusion models},
-  author={Carvalho, Jo{\~a}o and Le, An T and Baierl, Mark and Koert, Dorothea and Peters, Jan},
-  booktitle={IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
-  year={2023}
+```bibtex
+@article{wu2026jppd,
+  title  = {JPPD: Joint Prediction--Planning Diffusion with Differentiable Safety Guidance for Dynamic Obstacle Avoidance in Intelligent Transportation Systems},
+  author = {Wu, Jiahao and Yu, Shengwen},
+  journal = {Manuscript under review},
+  year   = {2026}
 }
 ```
 
----
+## Contact
 
-## Credits
-
-Parts of this work and software were taken and/or inspired from:
-
-- [https://github.com/jannerm/diffuser](https://github.com/jannerm/diffuser)
+Jiahao Wu<br>
+Department of Engineering, Mechanical Engineering<br>
+The University of Hong Kong<br>
+Email: 13620926353@163.com
