@@ -1,43 +1,74 @@
 <p align="center">
-  <img src="assets/jppd_architecture.png" alt="JPPD architecture" width="96%">
+  <img src="assets/jppd_architecture.png" alt="JPPD architecture" width="100%">
 </p>
 
 <h1 align="center">JPPD: Joint Prediction-Planning Diffusion</h1>
 
+<h3 align="center">
+  Differentiable safety-guided joint trajectory generation for dynamic obstacle avoidance in shared-space ITS.
+</h3>
+
 <p align="center">
-  <b>Differentiable safety-guided joint trajectory generation for dynamic obstacle avoidance in shared-space intelligent transportation systems.</b>
+  <img alt="Article" src="https://img.shields.io/badge/article-pending%20publication-0f766e?style=for-the-badge">
+  <img alt="Method" src="https://img.shields.io/badge/method-joint%20diffusion-2563eb?style=for-the-badge">
+  <img alt="Safety" src="https://img.shields.io/badge/guidance-DSPG-dc2626?style=for-the-badge">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-ROSOrin-7c3aed?style=for-the-badge">
 </p>
 
 <p align="center">
-  <a href="#overview"><img alt="Project" src="https://img.shields.io/badge/project-JPPD-111827"></a>
-  <a href="#method"><img alt="Method" src="https://img.shields.io/badge/method-joint%20diffusion-2563eb"></a>
-  <a href="#results"><img alt="Results" src="https://img.shields.io/badge/focus-tail%20safety-16a34a"></a>
-  <a href="#repository-status"><img alt="Status" src="https://img.shields.io/badge/code-placeholder%20release-f59e0b"></a>
+  <img alt="Python" src="https://img.shields.io/badge/Python-placeholder-3776AB?style=flat-square&logo=python&logoColor=white">
+  <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-planned-EE4C2C?style=flat-square&logo=pytorch&logoColor=white">
+  <img alt="ROS" src="https://img.shields.io/badge/ROS-ROSOrin%20deployment-22314E?style=flat-square&logo=ros&logoColor=white">
+  <img alt="Isaac Sim" src="https://img.shields.io/badge/Isaac%20Sim-3D%20validation-76B900?style=flat-square&logo=nvidia&logoColor=white">
+  <img alt="Status" src="https://img.shields.io/badge/code-release%20staging-F59E0B?style=flat-square">
+</p>
+
+<p align="center">
+  <a href="#overview"><img alt="Overview" src="https://img.shields.io/badge/overview-111827?style=flat-square"></a>
+  <a href="#visual-story"><img alt="Visual Story" src="https://img.shields.io/badge/visual%20story-4338ca?style=flat-square"></a>
+  <a href="#why-blade"><img alt="BLADE" src="https://img.shields.io/badge/BLADE%20clarification-be123c?style=flat-square"></a>
+  <a href="#method"><img alt="Method" src="https://img.shields.io/badge/method-0f766e?style=flat-square"></a>
+  <a href="#results"><img alt="Results" src="https://img.shields.io/badge/results-15803d?style=flat-square"></a>
+  <a href="#repository-status"><img alt="Repo Status" src="https://img.shields.io/badge/repository%20status-b45309?style=flat-square"></a>
 </p>
 
 ---
 
+<p align="center">
+  <img alt="Success" src="https://img.shields.io/badge/2D%20success-99.2%25-16a34a?style=for-the-badge">
+  <img alt="Latency" src="https://img.shields.io/badge/cycle%20time-32%20ms-2563eb?style=for-the-badge">
+  <img alt="Shared space" src="https://img.shields.io/badge/shared--space%20collision-0.9%25-dc2626?style=for-the-badge">
+  <img alt="ROSOrin" src="https://img.shields.io/badge/ROSOrin-191%2F200%20success-7c3aed?style=for-the-badge">
+</p>
+
 ## Overview
 
-Shared-space mobility is no longer a clean lane-following problem. Delivery robots, pedestrians, service carts, wheelchairs, micromobility users, and low-speed autonomous platforms increasingly negotiate the same sidewalks, corridors, plazas, and campus logistics zones.
+Shared-space mobility is no longer a clean lane-following problem. Delivery robots, pedestrians, service carts, wheelchairs, micromobility users, and low-speed autonomous platforms increasingly negotiate the same sidewalks, corridors, plazas, campus spaces, and logistics zones.
 
-Most navigation stacks still split the problem into two steps:
+Most navigation stacks still use a separated processing flow:
 
-1. predict how nearby participants will move;
-2. plan the ego robot trajectory against those predicted futures.
+```text
+observe the scene -> predict participant futures -> plan ego motion -> execute
+```
 
-That separation creates a one-way information flow. The robot plan can react to predicted participants, but the selected robot plan cannot reshape the predicted multi-agent evolution. JPPD removes that boundary by sampling the ego future and participant futures together from one coupled distribution.
+That pipeline is practical, but it freezes participant futures before the robot plan is selected. The robot can react to predicted participants, yet the selected robot motion cannot reshape the predicted multi-agent evolution. JPPD removes this boundary by sampling the ego future and participant futures together from one coupled distribution.
 
-<p align="center">
-  <img src="assets/jppd_problem_setting.png" alt="Separated prediction-planning versus JPPD" width="96%">
-</p>
+## Visual Story
+
+| Problem Setting | Joint Architecture |
+| --- | --- |
+| <img src="assets/jppd_problem_setting.png" alt="Separated prediction-planning versus JPPD" width="100%"> | <img src="assets/jppd_architecture.png" alt="JPPD system architecture" width="100%"> |
+
+| Navigation Effects | ROSOrin Deployment |
+| --- | --- |
+| <img src="assets/jppd_navigation_results.png" alt="JPPD navigation results" width="100%"> | <img src="assets/rosorin_deployment.png" alt="ROSOrin deployment visualization" width="100%"> |
 
 ## What JPPD Changes
 
-| Old separated stack | JPPD joint stack |
+| <img alt="Old" src="https://img.shields.io/badge/Separated%20Stack-BLADE--style-991b1b?style=for-the-badge"> | <img alt="New" src="https://img.shields.io/badge/Joint%20Stack-JPPD-166534?style=for-the-badge"> |
 | --- | --- |
-| Predict obstacle futures first, then freeze them. | Sample ego and participant futures as one joint state. |
-| Planner reacts to predictions, but cannot influence them. | Cross-trajectory attention lets ego and participant hypotheses co-evolve. |
+| Predict participant futures first, then freeze them. | Sample ego and participant futures as one joint state. |
+| The planner reacts to predictions, but cannot influence them. | Cross-trajectory attention lets interaction hypotheses co-evolve. |
 | Safety is often added as a post-hoc repulsive field. | DSPG injects a differentiable safety gradient during sampling. |
 | Sequential prediction and planning diffusion increases latency. | Conditional flow matching uses one compact sampler for fast replanning. |
 
@@ -49,33 +80,30 @@ Y = [ego trajectory, participant trajectory 1, ..., participant trajectory N]
 
 JPPD learns and samples `p(Y | context)` directly, then executes the first ego segment in a receding-horizon loop.
 
-## Important Note On "BLADE"
+## Why BLADE
 
 In this repository and the associated manuscript discussion, **BLADE is used as a broad shorthand for a decoupled prediction-then-planning composition**. It refers to the architectural pattern where an upper component predicts obstacle or participant futures and a lower component plans the ego trajectory against those fixed futures.
 
 We call this separated flow **BLADE** because it comes from our earlier bi-layer obstacle-avoidance design: one layer generates or predicts the surrounding dynamic scene, and another layer plans the ego motion using that already-generated scene. In other words, BLADE names a layered, decoupled decision structure rather than a single fixed codebase.
-
-It should not be read as a claim that every BLADE mention corresponds to one unique, monolithic, mandatory implementation. The key contrast is conceptual:
 
 ```text
 BLADE-style composition: prediction module + planning module, connected sequentially.
 JPPD: one joint generative sampler for prediction and planning.
 ```
 
-This clarification matters because the paper's novelty is not a cosmetic renaming of an earlier stack. The contribution is the move from a decoupled composition to a bidirectionally coupled joint prediction-planning diffusion process.
+The key contrast is conceptual. BLADE-style systems keep prediction and planning as two coupled-but-separate pieces. JPPD treats low-speed dynamic obstacle avoidance as a single joint generative decision problem.
 
 ## Method
 
-JPPD contains four pieces:
+| Component | Visual Tag | Role |
+| --- | --- | --- |
+| Joint Prediction-Planning Diffusion | <img alt="Joint" src="https://img.shields.io/badge/joint%20state-Y-2563eb"> | Samples ego and participant futures from one conditional distribution. |
+| CDiT | <img alt="CDiT" src="https://img.shields.io/badge/Transformer-CDiT-7c3aed"> | Uses agent-time tokens and cross-trajectory attention. |
+| DSPG | <img alt="DSPG" src="https://img.shields.io/badge/Safety-DSPG-dc2626"> | Guides the sampler with a learned time-varying occupancy potential. |
+| Flow Matching | <img alt="Flow Matching" src="https://img.shields.io/badge/Sampler-flow%20matching-0f766e"> | Reduces inference steps for embedded replanning. |
+| Risk-aware Selection | <img alt="Selector" src="https://img.shields.io/badge/Control-receding%20horizon-f59e0b"> | Scores complete joint futures and executes the first safe ego segment. |
 
-| Component | Role |
-| --- | --- |
-| Joint Prediction-Planning Diffusion | Samples ego and participant futures from one conditional distribution. |
-| CDiT | A causal diffusion Transformer with agent-time tokens and cross-trajectory attention. |
-| DSPG | Differentiable Safety Potential Guidance, a learned time-varying occupancy potential whose gradient guides the sampler. |
-| Risk-aware selector | Scores complete joint futures and executes the first safe ego segment before replanning. |
-
-The sampler uses conditional flow matching so that embedded deployment can run with fewer inference steps than a long DDPM chain. Safety guidance enters the vector field itself:
+Safety guidance enters the vector field itself:
 
 ```text
 guided_vector_field = learned_joint_vector_field - safety_weight * grad(safety_potential)
@@ -86,10 +114,6 @@ This makes safety a sampling-time bias over the joint prediction-planning poster
 ## Results
 
 The evaluation emphasizes operational shared-space metrics: near misses, blockage time, induced participant deviation, hard-braking events, collision rate, and embedded latency.
-
-<p align="center">
-  <img src="assets/jppd_navigation_results.png" alt="JPPD navigation results" width="96%">
-</p>
 
 ### Scenario-Grounded Shared-Space Simulation
 
@@ -115,11 +139,15 @@ The measured success-rate gain should be read as a tail-risk reduction. At high 
 
 JPPD was validated in simulation, naturalistic pedestrian replay, Isaac Sim, and physical ROSOrin trials. The deployment interface exposes joint ego-participant futures, DSPG risk regions, selected ego trajectory, and the first receding-horizon control segment.
 
-<p align="center">
-  <img src="assets/rosorin_deployment.png" alt="ROSOrin deployment visualization" width="96%">
-</p>
+| Scenario | Obstacles | Success | Collision | Mean Time | Control Rate |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Open | 2S + 0D | 50/50 | 0 | 9.1 s | 13.6 Hz |
+| Corridor | 3S + 0D | 49/50 | 0 | 11.7 s | 13.1 Hz |
+| Cluttered | 2S + 2D | 47/50 | 1 | 13.9 s | 12.4 Hz |
+| Dynamic | 1S + 4D | 45/50 | 2 | 16.1 s | 11.9 Hz |
+| **Overall** | **mixed** | **191/200** | **3** | **12.7 s** | **12.8 Hz** |
 
-Physical ROSOrin trials reported 191/200 successful runs across open, corridor, cluttered, and dynamic scenarios. The observed failures were dominated by LiDAR track merging, sudden participant reversals, and localization drift, which are explicitly outside the claim of formal safety certification.
+The observed failures were dominated by LiDAR track merging, sudden participant reversals, and localization drift, which are explicitly outside the claim of formal safety certification.
 
 ## Repository Status
 
@@ -139,6 +167,14 @@ The full code, trained models, simulation configurations, and real-robot trial l
 
 ## Planned Release
 
+<p>
+  <img alt="CDiT" src="https://img.shields.io/badge/CDiT-joint%20sampler-2563eb?style=flat-square">
+  <img alt="DSPG" src="https://img.shields.io/badge/DSPG-safety%20potential-dc2626?style=flat-square">
+  <img alt="Replay" src="https://img.shields.io/badge/ETH%2FUCY-replay-7c3aed?style=flat-square">
+  <img alt="Isaac" src="https://img.shields.io/badge/Isaac%20Sim-validation-76B900?style=flat-square">
+  <img alt="ROSOrin" src="https://img.shields.io/badge/ROSOrin-deployment-22314E?style=flat-square">
+</p>
+
 - CDiT joint sampler implementation.
 - DSPG occupancy-potential model and guidance hooks.
 - Synthetic shared-space scenario generator.
@@ -150,16 +186,7 @@ The full code, trained models, simulation configurations, and real-robot trial l
 
 ## Citation
 
-If you discuss or build on this work, please cite the manuscript:
-
-```bibtex
-@article{wu2026jppd,
-  title  = {JPPD: Joint Prediction--Planning Diffusion with Differentiable Safety Guidance for Dynamic Obstacle Avoidance in Intelligent Transportation Systems},
-  author = {Wu, Jiahao and Yu, Shengwen},
-  journal = {Manuscript under review},
-  year   = {2026}
-}
-```
+Article pending publication.
 
 ## Contact
 
