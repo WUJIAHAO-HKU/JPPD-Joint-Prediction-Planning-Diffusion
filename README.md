@@ -53,6 +53,8 @@ JPPD learns and samples `p(Y | context)` directly, then executes the first ego s
 
 In this repository and the associated manuscript discussion, **BLADE is used as a broad shorthand for a decoupled prediction-then-planning composition**. It refers to the architectural pattern where an upper component predicts obstacle or participant futures and a lower component plans the ego trajectory against those fixed futures.
 
+We call this separated flow **BLADE** because it comes from our earlier bi-layer obstacle-avoidance design: one layer generates or predicts the surrounding dynamic scene, and another layer plans the ego motion using that already-generated scene. In other words, BLADE names a layered, decoupled decision structure rather than a single fixed codebase.
+
 It should not be read as a claim that every BLADE mention corresponds to one unique, monolithic, mandatory implementation. The key contrast is conceptual:
 
 ```text
